@@ -1,0 +1,12 @@
+#root {
+    min-width: 250px;
+    min-height: 50px;
+    border: 1px dotted;
+}
+
+.bold {
+    font-weight: 700;
+}
+.italics {
+    font-style: italic;
+}
