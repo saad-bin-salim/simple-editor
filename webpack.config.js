@@ -13,7 +13,7 @@ module.exports = {
   plugins: [
     new HtmlWebpackPlugin({
       title: "Simple Editor",
-      template: "public/index.html",
+      template: "index.html",
     }),
   ],
   module: {
