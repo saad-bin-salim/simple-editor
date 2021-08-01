@@ -13,8 +13,9 @@ interface SelectionForElementNode {
   const spanNodeName = "SPAN";
   const boldClassName = "bold";
   const italicsClassName = "italics";
+  const rootElementId = "root";
 
-  const textElem = document.getElementById("root");
+  const textElem = document.getElementById(rootElementId);
   textElem.addEventListener("keydown", function (event) {
     // Command key field "metaKey" for mac
     if (event.keyCode === keyBold && event.metaKey) {
@@ -68,7 +69,7 @@ interface SelectionForElementNode {
     if (!isPartialSelection) {
       // full selection
       if (isSpanTag) {
-        const textNode = toggleRangeClassName(startContainer);
+        const textNode = toggleRangeClassName(startContainer.parentElement);
         return textNode;
       } else {
         const textNode = createFirstTimeBold(selection);
@@ -92,83 +93,224 @@ interface SelectionForElementNode {
     // ancestor is root
     // or other element incase of multiple heirarchy
     // check for length of selection and start and end container text length
+    let newStartNode, newEndNode, newStartOffset, newEndOffset;
     const { startContainer, endContainer, startOffset, endOffset } = range;
     const startSelectionLen = startContainer.nodeValue.length - startOffset;
     const selectionLen = selection.toString().length;
     const containerSelectionLen = startSelectionLen + endOffset;
+    const isStartPartialSelected = checkPartialSelectionForNode(
+      startContainer,
+      startOffset,
+      startContainer.nodeValue.length
+    );
+    const isEndPartialSelected = checkPartialSelectionForNode(
+      endContainer,
+      0,
+      endOffset
+    );
     if (selectionLen > containerSelectionLen) {
       // some text is selected in between the two containers
-    } else if (selectionLen === containerSelectionLen) {
-      // no text is selected in between the two containers
-      const isStartPartialSelected = checkPartialSelectionForNode(
-        startContainer,
-        startOffset,
-        startContainer.nodeValue.length
-      );
-      const isEndPartialSelected = checkPartialSelectionForNode(
-        endContainer,
-        0,
-        endOffset
-      );
-      // full selection
-      if (!isStartPartialSelected && !isEndPartialSelected) {
-        toggleRangeClassName(startContainer);
-        toggleRangeClassName(endContainer);
-        // as we are just updating the class number
-        // hence not returning selection data because range will remain unchanged
-      } else if (isStartPartialSelected && isEndPartialSelected) {
-        // both container has partial selection
-        const startNode = updateBoldForPartialSelectedNode(
-          startContainer,
-          startOffset,
-          startContainer.nodeValue.length,
-          true
-        );
-        const endNode = updateBoldForPartialSelectedNode(
-          endContainer,
-          0,
-          endOffset,
-          true
-        );
-        const endNodeLen = endNode.nodeValue.length;
-        return { startNode, endNode, startOffset: 0, endOffset: endNodeLen };
-      } else {
-        if (!isStartPartialSelected) {
-          // full selection of startContainer
-          toggleRangeClassName(startContainer);
-          // partial selection of endContainer
-          const textNode = updateBoldForPartialSelectedNode(
-            endContainer,
-            0,
-            endOffset,
-            true
-          );
-          return {
-            startNode: startContainer,
-            endNode: textNode,
-            startOffset: 0,
-            endOffset,
-          };
-        }
-        if (!isEndPartialSelected) {
-          // partial selection of startContainer
-          const textNode = updateBoldForPartialSelectedNode(
-            startContainer,
-            startOffset,
-            startContainer.nodeValue.length,
-            true
-          );
-          // full selection of endContainer
-          toggleRangeClassName(endContainer);
-          return {
-            startNode: textNode,
-            endNode: endContainer,
-            startOffset: 0,
-            endOffset,
-          };
+      // selection will always be text node
+      // hence parent node will be span tag
+      // we move to next sibling till lengths equal
+      const siblingsArray = []; // store next siblings in between start and endcontainer it will be span tags
+      const { parentNode } = startContainer as any;
+      let textInbetween = true;
+      let updateContainerLength = containerSelectionLen;
+      let nextSibling = parentNode.nextSibling;
+      while (textInbetween) {
+        const textNode = nextSibling.childNodes[0];
+        if (textNode.nodeName === textNodeName) {
+          if (
+            textNode.nodeValue.length + updateContainerLength <=
+            selectionLen
+          ) {
+            updateContainerLength += textNode.nodeValue.length;
+            siblingsArray.push(nextSibling);
+            nextSibling = nextSibling.nextSibling;
+          } else {
+            textInbetween = false;
+          }
         }
       }
+      // if any start or end or siblings node has no bold class
+      // then update all to bold class
+      let isBoldRequired = false; // full selection is bold
+      if (
+        !checkBoldClass(startContainer.parentNode) ||
+        !checkBoldClass(endContainer.parentNode)
+      ) {
+        isBoldRequired = true;
+      }
+      for (let i = 0; i < siblingsArray.length; i++) {
+        if (!checkBoldClass(siblingsArray[i])) {
+          isBoldRequired = true;
+        }
+      }
+      if (isBoldRequired) {
+        for (let i = 0; i < siblingsArray.length; i++) {
+          if (!checkBoldClass(siblingsArray[i])) {
+            toggleRangeClassName(siblingsArray[i]);
+          }
+        }
+        let startSelection = {};
+        let endSelection = {};
+        if (!checkBoldClass(startContainer.parentNode)) {
+          startSelection = updateBoldForStartContainer(
+            isStartPartialSelected,
+            startContainer,
+            startOffset
+          );
+        }
+        if (!checkBoldClass(endContainer.parentNode)) {
+          endSelection = updateBoldForEndContainer(
+            isEndPartialSelected,
+            endContainer,
+            endOffset
+          );
+        }
+
+        return { ...startSelection, ...endSelection };
+      } else {
+        // remove bold class
+        for (let i = 0; i < siblingsArray.length; i++) {
+          toggleRangeClassName(siblingsArray[i]);
+        }
+        const startSelection = updateBoldForStartContainer(
+          isStartPartialSelected,
+          startContainer,
+          startOffset
+        );
+        const endSelection = updateBoldForEndContainer(
+          isEndPartialSelected,
+          endContainer,
+          endOffset
+        );
+        return { ...startSelection, ...endSelection };
+      }
+    } else if (selectionLen === containerSelectionLen) {
+      // no text is selected in between the two containers
+      // full selection
+      const startSelection = updateBoldForStartContainer(
+        isStartPartialSelected,
+        startContainer,
+        startOffset
+      );
+      const endSelection = updateBoldForEndContainer(
+        isEndPartialSelected,
+        endContainer,
+        endOffset
+      );
+      return { ...startSelection, ...endSelection };
     }
+  }
+  function updateBoldForStartEndContainer(
+    isStartPartialSelected: boolean,
+    isEndPartialSelected: boolean,
+    startContainer: Node,
+    endContainer: Node,
+    startOffset: number,
+    endOffset: number
+  ) {
+    let newStartNode, newEndNode, newStartOffset, newEndOffset;
+    if (!isStartPartialSelected) {
+      toggleRangeClassName(startContainer.parentElement);
+      newStartNode = startContainer;
+      newStartOffset = 0;
+      // as we are just updating the class number
+      // hence selection data because range will remain unchanged
+    }
+    if (isStartPartialSelected) {
+      // both container has partial selection
+      const startNode = updateBoldForPartialSelectedNode(
+        startContainer,
+        startOffset,
+        startContainer.nodeValue.length,
+        true
+      );
+      newStartNode = startNode;
+      newStartOffset = 0;
+    }
+    if (!isEndPartialSelected) {
+      toggleRangeClassName(endContainer.parentElement);
+      newEndNode = endContainer;
+      newEndOffset = endContainer.nodeValue.length;
+      // as we are just updating the class number
+      // hence selection data because range will remain unchanged
+    }
+    if (isEndPartialSelected) {
+      const endNode = updateBoldForPartialSelectedNode(
+        endContainer,
+        0,
+        endOffset,
+        true
+      );
+      newEndNode = endNode;
+      newEndOffset = endNode.nodeValue.length;
+    }
+    return {
+      startNode: newStartNode,
+      endNode: newEndNode,
+      startOffset: newStartOffset,
+      endOffset: newEndOffset,
+    };
+  }
+  function updateBoldForStartContainer(
+    isPartialSelected: boolean,
+    startContainer: Node,
+    offset: number
+  ) {
+    let newStartNode, newStartOffset;
+    if (!isPartialSelected) {
+      toggleRangeClassName(startContainer.parentElement);
+      newStartNode = startContainer;
+      newStartOffset = 0;
+      // as we are just updating the class number
+      // hence selection data because range will remain unchanged
+    }
+    if (isPartialSelected) {
+      // both container has partial selection
+      const startNode = updateBoldForPartialSelectedNode(
+        startContainer,
+        offset,
+        startContainer.nodeValue.length,
+        true
+      );
+      newStartNode = startNode;
+      newStartOffset = 0;
+    }
+    return {
+      startNode: newStartNode,
+      startOffset: newStartOffset,
+    };
+  }
+  function updateBoldForEndContainer(
+    isEndPartialSelected: boolean,
+    endContainer: Node,
+    endOffset: number
+  ) {
+    let newEndNode, newEndOffset;
+    if (!isEndPartialSelected) {
+      toggleRangeClassName(endContainer.parentElement);
+      newEndNode = endContainer;
+      newEndOffset = endContainer.nodeValue.length;
+      // as we are just updating the class number
+      // hence selection data because range will remain unchanged
+    }
+    if (isEndPartialSelected) {
+      const endNode = updateBoldForPartialSelectedNode(
+        endContainer,
+        0,
+        endOffset,
+        true
+      );
+      newEndNode = endNode;
+      newEndOffset = endNode.nodeValue.length;
+    }
+    return {
+      endNode: newEndNode,
+      endOffset: newEndOffset,
+    };
   }
   function updateBoldForPartialSelectedNode(
     node: any,
@@ -196,29 +338,36 @@ interface SelectionForElementNode {
     const textNode2 = document.createTextNode(textArray[1]);
     const textNode3 = document.createTextNode(textArray[2]);
 
-    span1.appendChild(textNode1);
-    span2.appendChild(textNode2);
-    span3.appendChild(textNode3);
+    textArray[0] && span1.appendChild(textNode1);
+    textArray[1] && span2.appendChild(textNode2);
+    textArray[2] && span3.appendChild(textNode3);
 
     span2.classList.toggle(boldClassName);
 
-    const rootElem = document.getElementById("root");
+    const rootElem = document.getElementById(rootElementId);
     if (isSpanTag) {
-      rootElem.replaceChild(span1, parentNode);
+      if (textArray[0]) {
+        rootElem.replaceChild(span1, parentNode);
+      } else {
+        rootElem.replaceChild(span2, parentNode);
+      }
     } else {
       // first time partial text node selection
       // rootElem.firstChild this is textNode
-      rootElem.replaceChild(span1, rootElem.firstChild);
+      if (textArray[0]) {
+        rootElem.replaceChild(span1, rootElem.firstChild);
+      } else {
+        rootElem.replaceChild(span2, rootElem.firstChild);
+      }
     }
 
     span1.insertAdjacentElement("afterend", span2);
-    span2.insertAdjacentElement("afterend", span3);
+    textArray[2] && span2.insertAdjacentElement("afterend", span3);
     return span2.firstChild;
   }
-  function toggleRangeClassName(node: Node) {
-    const { parentNode }: any = node; // span tag
-    parentNode.classList.toggle(boldClassName);
-    return node;
+  function toggleRangeClassName(node: any) {
+    node.classList.toggle(boldClassName);
+    return node.firstChild;
   }
   function createFirstTimeBold(selection: Selection) {
     // first time creation
@@ -226,7 +375,7 @@ interface SelectionForElementNode {
     spanNode.classList.add(boldClassName);
     const textNode = document.createTextNode(selection.toString());
     spanNode.appendChild(textNode);
-    const rootElem = document.getElementById("root");
+    const rootElem = document.getElementById(rootElementId);
     rootElem.replaceChild(spanNode, rootElem.firstChild);
     return spanNode.firstChild;
   }
