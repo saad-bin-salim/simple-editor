@@ -6,14 +6,14 @@ module.exports = {
   entry: "./src/index.ts",
   devtool: "inline-source-map",
   devServer: {
-    contentBase: "./dist",
+    contentBase: "./docs",
     hot: true,
     port: 3001,
   },
   plugins: [
     new HtmlWebpackPlugin({
       title: "Simple Editor",
-      template: "index.html",
+      template: "public/index.html",
     }),
   ],
   module: {
@@ -34,7 +34,7 @@ module.exports = {
   },
   output: {
     filename: "bundle.js",
-    path: path.resolve(__dirname, "dist"),
+    path: path.resolve(__dirname, "docs"),
     clean: true,
   },
 };
